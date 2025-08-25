@@ -1,17 +1,17 @@
-# Research Package Collection
+# Bridging Expressivity and Scalability with Adaptive Unitary SSMs
 
-This is a multi-package repository. The instructions for building and using each package will be written in the README.md
-written for each package in their respective directories.
+This is the code base implementing the Adaptive Unitary SSM (AUSSM) introduced in our paper [Bridging Expressivity and Scalability with Adaptive Unitary SSMs](https://arxiv.org/abs/2507.05238).
+We have released our custom optimized CUDA kernel for AUSSM that can be used to build SSM backbones.
 
 The current list of packages are:
 
-- `ai-modules` - this is the master collection of models, tasks and datasets that can be used to run the machine learning experiments.
-- `extension-cpp` - this package contains a collection of pytorch operators that extend the existing functionality of pytorch with accelerated cpp and cuda codes.
+- `ai-modules` - this is the master collection of models, tasks and datasets that are used to run the experiments.
+- `extension-cpp` - this package contains a collection of pytorch operators for the AUSSM kernel that extend the existing functionality of pytorch with cuda codes. Currently we have only GPU implementations.
 
-## How to use
+## Usage
 
 Once installed, the `wavesAI.model` module contains all the necessary model classes. We provide some models specialized 
-for some tasks, but these are easily extended to any task. We have following implementations: 
+for some tasks, but these are easily extended to any task. We have following model implementations: 
 
 - `SSMTS` - processing multivariate timeseries 
 - `SSMClassifier` - processes a timseries and returns the logits for classification
@@ -39,12 +39,12 @@ print(model(x))
 print(model(x).shape)  ## (8, 256, 8)
 ```
 
-If you want to directly use the blocks instead of the full model, the block classes can be used directly 
+If you want to directly use the blocks instead of the full model, the block classes can be directly initialized.
 
 - `MambaBlock`: creates a single standard Mamba block with the S6 SSM. The block can be configured using the class `ModelArgsMamba`
 - `SSMauBlock`: The Adaptive and Unitary SSM (AUSSM) block. The block can be configured using the class `ModelArgsSSMau` 
 
-below we provide a sample implementation of the `SSMauBlock`.
+below we provide a sample implementation of the AUSSM block.
 
 ```python
 from wavesAI.model.aussm import SSMauBlock, ModelArgsSSMau

@@ -1,24 +1,14 @@
-"""Simple, minimal implementation of Mamba in one file of PyTorch.
-
-Suggest reading the following before/while reading the code:
-    [1] Mamba: Linear-Time Sequence Modeling with Selective State Spaces (Albert Gu and Tri Dao)
-        https://arxiv.org/abs/2312.00752
-    [2] The Annotated S4 (Sasha Rush and Sidd Karamcheti)
-        https://srush.github.io/annotated-s4
+"""
+All the classes required to run AUSSM in a single file
 
 Glossary:
-    b: batch size                       (`B` in Mamba paper [1] Algorithm 2)
-    l: sequence length                  (`L` in [1] Algorithm 2)
-    d or d_model: hidden dim
-    n or d_state: latent state dim      (`N` in [1] Algorithm 2)
-    expand: expansion factor            (`E` in [1] Section 3.4)
-    d_in or d_inner: d * expand         (`D` in [1] Algorithm 2)
-    A, B, C, D: state space parameters  (See any state space representation formula)
-                                        (B, C are input-dependent (aka selective, a key innovation in Mamba); A, D are not)
-    Δ or delta: input-dependent step size
-    dt_rank: rank of Δ                  (See [1] Section 3.6 "Parameterization of ∆")
 
+b - batch size
+l - sequence length (time dimension)
+d - input dimension
+n - hidden size
 """
+
 from __future__ import annotations
 import math
 import json
@@ -44,6 +34,18 @@ from sympy.polys.polyoptions import allowed_flags
 
 @dataclass
 class ModelArgsSSMau:
+    """
+    Configures Mamba style block with the AUSSM
+
+    d_model (int): the input dimensions of the SSM
+    d_state (int): the hidden state dimension of the SSM
+    dt_rank (int): rank of the dt parameter
+    d_conv (int): size of the 1d convolution kernel used in the convolution block
+    conv_bias (bool): If the convolution block uses bias
+    verbose (bool): verbose flag
+    conv_1d (bool): whether the convolution block is used in the Mamba block
+    cuda (bool): use the optimized cuda kernel. Currently only cuda=True is supported
+    """
     d_model: int
     d_state: int
     dt_rank: Union[int, str] = 'auto'
@@ -61,6 +63,17 @@ class ModelArgsSSMau:
 
 @dataclass
 class ModelArgsMamba:
+    """
+    Configures a Mamba style block with the AUSSM
+
+    d_model (int): the input dimensions of the SSM
+    d_state (int): the hidden state dimension of the SSM
+    expand  (int): whether the input dimensions are expanded before processing
+    dt_rank (int): rank of the dt parameter
+    d_conv (int): size of the 1d convolution kernel used in the convolution block
+    bias (bool): If the convolution block uses bias
+    verbose (bool): verbose flag
+    """
     d_model: int
     d_state: int = 16
     expand: int = 2
@@ -85,6 +98,24 @@ class ModelBlockArgs:
 
 
 class SSMTS(nn.Module):
+    """
+    A timeseries processing model with a Mamba+AUSSM backbone
+
+    d_model (int): the input dimensions of the SSM
+    input_dim (int): the input dimension of the timeseries
+    output_dim (int): the output dimension of the timeseries
+    layers (str): a layer string with the configuration of `a` (AUSSM) and `m` (Mamba S6) blocks. eg. string `a|m|a` initializes a
+                  three layer backbone with AUSSM -> Mamba (S6) -> AUSSM
+    d_state (int): the hidden state dimension of the SSM
+    mamba_expand (int): the expansion parameter of Mamba S6
+    dt_rank (int): rank of the dt parameter
+    d_conv (int): size of the 1d convolution kernel used in the convolution block of Mamba S6
+    conv_bias (bool): If the convolution block uses bias
+    bias (bool): is bias is used in the layers
+    ssmau_cuda (bool): use the optimized cuda kernel for AUSSM. Currently only cuda=True is supported
+    ssmau_conv_1d (bool): whether the convolution block is used in the AUSSM block
+    embedding
+    """
     def __init__(self, d_model: int,
                  input_dim: int,
                  output_dim: int,
@@ -98,10 +129,7 @@ class SSMTS(nn.Module):
                  ssmau_cuda: bool = True,
                  ssmau_conv_1d: bool = True,
                  embedding_decay: bool = True,
-                 verbose: bool = True):  # two modes are supported - `meanpool` and `last`
-        """ A time series model that uses the AUSSM hybrid backbone
-
-        """
+                 verbose: bool = True):
         super().__init__()
         if layers is None:
             layers = "m|a"
@@ -186,10 +214,6 @@ class SSMTS(nn.Module):
 
         Returns:
             logits: shape (b, l, output_dim)
-
-        Official Implementation:
-            class MambaLMHeadModel, https://github.com/state-spaces/mamba/blob/main/mamba_ssm/models/mixer_seq_simple.py#L173
-
         """
         x = self.embedding(input_ids)
 
@@ -204,6 +228,25 @@ class SSMTS(nn.Module):
 
 
 class SSMClassifier(nn.Module):
+    """
+        A sequence classification model with a Mamba+AUSSM backbone
+
+        d_model (int): the input dimensions of the SSM
+        input_dim (int): the input dimension of the timeseries
+        output_dim (int): the output dimension of the timeseries
+        layers (str): a layer string with the configuration of `a` (AUSSM) and `m` (Mamba S6) blocks. eg. string `a|m|a` initializes a
+                      three layer backbone with AUSSM -> Mamba (S6) -> AUSSM
+        d_state (int): the hidden state dimension of the SSM
+        mamba_expand (int): the expansion parameter of Mamba S6
+        dt_rank (int): rank of the dt parameter
+        d_conv (int): size of the 1d convolution kernel used in the convolution block of Mamba S6
+        conv_bias (bool): If the convolution block uses bias
+        bias (bool): is bias is used in the layers
+        mode (bool): "meanpool|last"
+        ssmau_cuda (bool): use the optimized cuda kernel for AUSSM. Currently only cuda=True is supported
+        ssmau_conv_1d (bool): whether the convolution block is used in the AUSSM block
+        embedding
+    """
     def __init__(self, d_model: int,
                  input_dim: int,
                  output_dim: int,
@@ -218,14 +261,6 @@ class SSMClassifier(nn.Module):
                  ssmau_conv_1d: bool = True,
                  ssmau_cuda: bool = True,
                  verbose: bool = True):  # two modes are supported - `meanpool` and `last`
-        """Full Mamba model.
-        Flags control what kind of models are used.
-
-        o - optimized model (Mamba)
-        a - use the adaptive class of models (the flag is used with other flags as shown below
-        aoc - this will be the general complex-valued cuda kernel that is adaptive
-        aocu - this will be the unitary and adaptive kernel
-        """
         super().__init__()
         if layers is None:
             layers = "m|a"
@@ -315,14 +350,10 @@ class SSMClassifier(nn.Module):
     def forward(self, input_ids, lengths=None, **kwargs):
         """
         Args:
-            input_ids (long tensor): shape (b, l, d)    (See Glossary at top for definitions of b, l, d_in, n...)
+            input_ids (long tensor): shape (b, l, d) (See Glossary at top for definitions of b, l, d, n...)
 
         Returns:
             logits: shape (b, l, output_dim)
-
-        Official Implementation:
-            class MambaLMHeadModel, https://github.com/state-spaces/mamba/blob/main/mamba_ssm/models/mixer_seq_simple.py#L173
-
         """
         x = self.input_layer(input_ids)
 
@@ -349,6 +380,26 @@ class SSMClassifier(nn.Module):
 
 
 class SSMSequenceClassifier(nn.Module):
+    """
+        A sequence classification model with a Mamba+AUSSM backbone, where the sequence has a specific language.
+
+        d_model (int): the input dimensions of the SSM
+        vocab_size (int): the vocabulary size of the sequence
+        input_dim (int): the input dimension of the sequence
+        output_dim (int): the output dimension of the sequence (number of classes)
+        layers (str): a layer string with the configuration of `a` (AUSSM) and `m` (Mamba S6) blocks. eg. string `a|m|a` initializes a
+                      three layer backbone with AUSSM -> Mamba (S6) -> AUSSM
+        d_state (int): the hidden state dimension of the SSM
+        mamba_expand (int): the expansion parameter of Mamba S6
+        dt_rank (int): rank of the dt parameter
+        d_conv (int): size of the 1d convolution kernel used in the convolution block of Mamba S6
+        conv_bias (bool): If the convolution block uses bias
+        bias (bool): is bias is used in the layers
+        mode (bool): "meanpool|last"
+        ssmau_cuda (bool): use the optimized cuda kernel for AUSSM. Currently only cuda=True is supported
+        ssmau_conv_1d (bool): whether the convolution block is used in the AUSSM block
+        embedding
+    """
     def __init__(self, d_model: int,
                  vocab_size: int,
                  output_dim: int,
@@ -364,14 +415,6 @@ class SSMSequenceClassifier(nn.Module):
                  ssmau_conv_1d: bool = True,
                  embedding_decay: bool = True,
                  verbose: bool = True):  # two modes are supported - `meanpool` and `last`
-        """Full Mamba model.
-        Flags control what kind of models are used.
-
-        o - optimized model (Mamba)
-        a - use the adaptive class of models (the flag is used with other flags as shown below
-        aoc - this will be the general complex-valued cuda kernel that is adaptive
-        aocu - this will be the unitary and adaptive kernel
-        """
         super().__init__()
         if layers is None:
             layers = "m|a"
@@ -464,14 +507,10 @@ class SSMSequenceClassifier(nn.Module):
     def forward(self, input_ids, lengths=None, **kwargs):
         """
         Args:
-            input_ids (long tensor): shape (b, l)    (See Glossary at top for definitions of b, l, d_in, n...)
+            input_ids (long tensor): shape (b, l) (See Glossary at top for definitions of b, l, d, n...)
 
         Returns:
             logits: shape (b, l, output_dim)
-
-        Official Implementation:
-            class MambaLMHeadModel, https://github.com/state-spaces/mamba/blob/main/mamba_ssm/models/mixer_seq_simple.py#L173
-
         """
         x = self.embedding(input_ids)
 
@@ -502,42 +541,50 @@ class SSMSequenceClassifier(nn.Module):
 ## It is possibly due to complex operators in the custom operator.
 ## DO NOT USE COMPILE HERE: @torch.compile
 class SSMSeq2Seq(nn.Module):
+    """
+        A sequence2sequence model with a Mamba+AUSSM backbone
+
+        d_model (int): the input dimensions of the SSM
+        vocab_size (int): the vocabulary size of the input sequence
+        output_vocab_size (int): the vocabulary size of the output sequence
+        layers (str): a layer string with the configuration of `a` (AUSSM) and `m` (Mamba S6) blocks. eg. string `a|m|a` initializes a
+                      three layer backbone with AUSSM -> Mamba (S6) -> AUSSM
+        d_state (int): the hidden state dimension of the SSM
+        mamba_expand (int): the expansion parameter of Mamba S6
+        dt_rank (int): rank of the dt parameter
+        d_conv (int): size of the 1d convolution kernel used in the convolution block of Mamba S6
+        conv_bias (bool): If the convolution block uses bias
+        bias (bool): is bias is used in the layers
+        mode (bool): "meanpool|last"
+        ssmau_cuda (bool): use the optimized cuda kernel for AUSSM. Currently only cuda=True is supported
+        ssmau_conv_1d (bool): whether the convolution block is used in the AUSSM block
+        embedding
+    """
     def __init__(self, d_model: int,
                  vocab_size: int,
                  output_vocab_size: int,
                  layers: str=None,
-                 output_dim=None,
                  d_state: int = 16,
                  mamba_expand: int = 2,
                  dt_rank: Union[int, str] = 'auto',
                  d_conv: int = 4,
-                 pad_vocab_size_multiple: int = 8,
                  conv_bias: bool = True,
                  bias: bool = False,
                  ssmau_conv_1d: bool = True,
                  embedding_decay: bool = True,
                  ssmau_cuda: bool = True,
                  verbose: bool = True):  # two modes are supported - `meanpool` and `last`
-        """Full Mamba model.
-        Flags control what kind of models are used.
-
-        o - optimized model (Mamba)
-        a - use the adaptive class of models (the flag is used with other flags as shown below
-        aoc - this will be the general complex-valued cuda kernel that is adaptive
-        aocu - this will be the unitary and adaptive kernel
-        """
         super().__init__()
         if layers is None:
             layers = "m|a"
 
         self.n_layers = len(layers.split('|'))
-        self.num_classes = output_dim
         self.d_model = d_model
         self.d_state = d_state
         self.dt_rank = dt_rank
         self.d_conv = d_conv
         self.mamba_expand = mamba_expand
-        self.pad_vocab_size_multiple = pad_vocab_size_multiple
+        self.pad_vocab_size_multiple = 8
         self.conv_bias = conv_bias
         self.verbose = verbose
         self.bias = bias
@@ -626,10 +673,14 @@ class SSMSeq2Seq(nn.Module):
 
         return logits
 
+"""
+The following classes are adapted from https://github.com/johnma2006/mamba-minimal
+"""
+
 
 class ResidualBlock(nn.Module):
     def __init__(self, args: Union[ModelArgsSSMau,ModelArgsMamba]):
-        """Simple block wrapping Mamba block with normalization and residual connection."""
+        """Simple block wrapping Mamba or AUSSM blocks with normalization and residual connection."""
         super().__init__()
         self.args = args
         self.mixer = args.block(args)
@@ -641,7 +692,7 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         """
         Args:
-            x: shape (b, l, d)    (See Glossary at top for definitions of b, l, d_in, n...)
+            x: shape (b, l, d)    (See Glossary at top for definitions of b, l, d, n...)
 
         Returns:
             output: shape (b, l, d)
@@ -756,7 +807,7 @@ class MambaBlock(nn.Module):
 
 class SSMauBlock(nn.Module):
     def __init__(self, args: ModelArgsSSMau):
-        """A single SSMau block."""
+        """A single AUSSM block."""
         super().__init__()
         self.args = args
 
@@ -849,151 +900,6 @@ class SSMauBlock(nn.Module):
 
         y = rearrange(y, "b d l -> b l d")
         return y
-
-
-# class MixedSSMBlock(nn.Module):
-#     def __init__(self, args: ModelArgs):
-#         """A single Mamba block, as described in Figure 3 in Section 3.4 in the Mamba paper [1]."""
-#         super().__init__()
-#         self.args = args
-#
-#         self.in_proj = nn.Linear(args.d_model, args.d_model * 2, bias=args.bias)
-#
-#         self.conv1d = nn.Conv1d(
-#             in_channels=args.d_model,
-#             out_channels=args.d_model,
-#             bias=args.conv_bias,
-#             kernel_size=args.d_conv,
-#             groups=args.d_model,
-#             padding=args.d_conv - 1,
-#         )
-#         self.out_proj = nn.Linear(args.d_model, args.d_model, bias=args.bias)
-#         # self.initialize_model_specific_parameters(args)
-#         self.x_proj = nn.Linear(args.d_model,
-#                                 (args.mamba_dt_rank + args.mamba_d_state * 2) + args.ssmau_dt_rank,
-#                                 bias=False)
-#
-#         if self.args.mamba_d_model > 0:
-#             self.dt_proj_mamba = nn.Linear(args.mamba_dt_rank, args.mamba_d_model, bias=True)
-#             self.mamba_D = nn.Parameter(torch.ones(args.mamba_d_model))
-#             A = repeat(torch.arange(1, args.mamba_d_state + 1), 'n -> d n', d=args.mamba_d_model)
-#             self.A_log = nn.Parameter(torch.log(A))
-#             self.A_log._no_weight_decay = True
-#
-#         if self.args.ssmau_d_model > 0:
-#             self.dt_proj_ssmau = nn.Linear(args.ssmau_dt_rank, args.ssmau_d_model, bias=True)
-#             self.ssmau_D = nn.Parameter(torch.ones(args.ssmau_d_model))
-#             self.ssmau_C = nn.Parameter(torch.randn(args.ssmau_d_state, dtype=torch.complex64), requires_grad=True)
-#             self.ssmau_B = nn.Parameter(torch.randn(args.ssmau_d_state, dtype=torch.complex64), requires_grad=True)
-#             self.ssmau_xA_proj = nn.Linear(args.ssmau_d_model, args.ssmau_d_model * args.ssmau_d_state, bias=True)
-#             self.ssmau_xA_proj.bias.data.uniform_(-torch.pi, torch.pi)
-#
-#         print("Available parameters:")
-#         for named_module in self.named_modules():
-#             print(named_module)
-#
-#     def forward(self, x: torch.Tensor) -> torch.Tensor:
-#         """
-#         Forward function for the mixed SSM block
-#
-#         :param x:
-#         :return:
-#         """
-#         (b, l, d) = x.shape
-#
-#         x_and_z = self.in_proj(x)  # shape (b, l, 2 * d_in)
-#         (x, z) = x_and_z.split(split_size=[self.args.d_inner, self.args.d_inner], dim=-1)
-#
-#         x = rearrange(x, 'b l d_in -> b d_in l')
-#         x = self.conv1d(x)[:, :, :l]
-#         x = rearrange(x, 'b d_in l -> b l d_in')
-#
-#         ## split x and z into two
-#         x_mamba, x_ssmau = x.split(split_size=[self.args.ssmau_d_model, self.args.mamba_d_model], dim=-1)
-#         z_mamba, z_ssmau = z.split(split_size=[self.args.ssmau_d_model, self.args.mamba_d_model], dim=-1)
-#
-#         x_projected = self.x_proj(x)
-#         x_proj_mamba, x_proj_ssmau = x_projected.split([self.args.mamba_dt_rank + self.args.mamba_d_state * 2,
-#                                                         self.ssmau_dt_rank], dim=-1)
-#
-#         # mamba side
-#         y_mamba = self.ssm_mamba(x_mamba, z_mamba, x_proj_mamba)
-#
-#         # ssmau side
-#         y_ssmau = self.ssm_au(x_ssmau, z_ssmau, x_proj_ssmau)
-#
-#         ## merge into single y
-#         y = torch.concat([y_mamba, y_ssmau], dim=-1)
-#
-#         output = self.out_proj(y)
-#
-#         return output
-#
-#     def ssm_au(self, x, z, x_proj):
-#
-#         if self.args.ssmau_d_model == 0:
-#             return torch.Tensor([])
-#
-#         b, l, d_in = x.shape
-#         n = self.args.ssmau_d_state
-#
-#         dt = self.dt_proj_ssmau(x_proj)
-#         dt = dt + self.dt_proj_ssmau.bias.float()
-#         dt = F.softplus(dt)
-#
-#         x_param = rearrange(self.xA_proj.weight, "(n dstate1)  dstate -> dstate1 n dstate", n=n,
-#                             dstate=d_in,
-#                             dstate1=d_in)
-#
-#         x_bias = rearrange(self.xA_proj.bias, "(n dstate1) -> dstate1 n", n=n, dstate1=d_in)
-#
-#         ssm_args = {
-#             "u": rearrange(x, "b l d -> b d l").contiguous(),
-#             "dt": rearrange(dt, "b l d -> b d l", l=l).contiguous(),
-#             "x": x_param.contiguous() * (1 / np.sqrt(self.args.ssmau_d_model)),
-#             "x_bias": x_bias.contiguous(),
-#             "B": self.ssmau_B.contiguous(),
-#             "C": self.ssmau_C.contiguous(),
-#             "D": self.ssmau_D.float().contiguous(),
-#             "z": rearrange(z, "b l d -> b d l").contiguous()
-#         }
-#
-#         y = extension_cpp.ops.ssm_adaptive_interface(**ssm_args, unitary=True)
-#         y = rearrange(y, "b d l -> b l d")
-#         return y
-#
-#     def ssm_mamba(self, x, z, x_proj):
-#
-#         if self.args.mamba_d_model == 0:
-#             return torch.Tensor([])
-#
-#         b, l, d_in = x.shape
-#         n = self.args.mamba_d_state
-#
-#         dt, B, C = x_proj.split([self.args.mamba_dt_rank,
-#                                  self.args.mamba_d_state,
-#                                  self.args.mamba_d_state], dim=-1)
-#
-#         dt = self.dt_proj_mamba(x_proj)
-#         x = F.silu(x)
-#         A = -torch.exp(self.A_log.float())  # shape (d_in, n)
-#         dt_bias = self.dt_proj_mamba.bias.float()
-#
-#         y = selective_scan_fn(
-#             rearrange(x, "b l d -> b d l").contiguous(),
-#             rearrange(dt, "b l d -> b d l", l=l).contiguous(),
-#             A.contiguous(),
-#             rearrange(B, "b l n -> b n l", l=l).contiguous(),
-#             rearrange(C, "b l n -> b n l", l=l).contiguous(),
-#             self.D.float().contiguous(),
-#             z=rearrange(z, "b l d -> b d l").contiguous(),
-#             delta_bias=dt_bias,
-#             delta_softplus=True,
-#             return_last_state=False
-#         )
-#
-#         y = rearrange(y, "b d l -> b l d")
-#         return y
 
 
 class RMSNorm(nn.Module):
