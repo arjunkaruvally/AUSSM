@@ -1,0 +1,74 @@
+seed_everything: 1
+model:
+  class_path: wavesAI.task.sequence_mse_regression.SequenceRegression # This defines the task. Set this to the full import name of the task to perform
+  init_args:
+    scheduler_interval: step
+    scheduler_frequency: 1
+    network:
+      class_path: wavesAI.model.aussm.SSMTS # this defines the model. Set it to the full import name of the model
+      init_args: # This contains key: value pairs of arguments to the model
+        input_dim: 6
+        output_dim: 2
+        d_state: 32
+    optimizer:
+      class_path: torch.optim.AdamW
+      init_args:
+        lr: 0.00001
+        weight_decay: 0.0
+data:
+  class_path: wavesAI.data.weather.WeatherDataset
+  init_args:
+    data_path: "weather.csv"
+    batch_size: 64
+    num_workers: 4
+    pin_memory: false
+optimizer: null
+lr_scheduler: null
+ckpt_path: null
+trainer:
+  max_epochs: -1
+  max_steps: 50000
+  accelerator: auto
+  strategy: auto
+  devices: auto
+  num_nodes: 1
+  precision: null
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      group: experiment_0
+      project: "exp_12_3_test"  # Project name TODO: VERIFY BEFORE USING IN EXPERIMENTS
+      log_model: False
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        monitor: validation_loss
+        mode: min
+  fast_dev_run: false
+  min_epochs: null
+  min_steps: null
+  max_time: null
+  limit_train_batches: null
+  limit_val_batches: null
+  limit_test_batches: null
+  limit_predict_batches: null
+  overfit_batches: 0.0
+  check_val_every_n_epoch: null
+  num_sanity_val_steps: 15
+  log_every_n_steps: 50
+  enable_checkpointing: null
+  enable_progress_bar: null
+  enable_model_summary: null
+  accumulate_grad_batches: 1
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: null
+  deterministic: true
+  benchmark: null
+  inference_mode: true
+  use_distributed_sampler: true
+  profiler: null
+  detect_anomaly: false
+  barebones: false
+  plugins: null
+  sync_batchnorm: false
+  reload_dataloaders_every_n_epochs: 0

@@ -1,0 +1,28 @@
+## List of required environment variables
+
+## cache for wandb to prevent filling up home space
+# this is the wandb cache dir
+export WANDB_CACHE_DIR=/cache/wandb
+# this is the HF cache location
+export HF_HOME=/cache/datasets
+
+## these are necessary for the script to find the required files
+# this is where the data is stored. in case of huggingface, the data may need to be first downloaded to the location prior to use
+export DATA_ROOT=/data
+# this the location where the experiment outputs are writte to
+export EXPERIMENT_OUTPUT_ROOT=/output
+# this is the root of the code
+export CODE_ROOT=/AUSSM
+# this is the conda environment path
+export CONDA_ENV=aussm
+# this is the root of the experiments directory
+export EXPERIMENT_SOURCE_ROOT=/AUSSM/experiments
+
+# this is a path with a large storage availability (for creating temporary files and such)
+# NOTE: this is used in some scripts to store temporary data
+export SCRATCH_PATH=/scratch
+
+# this supports different build environments - currently there is debug and deploy
+# debug will only specialize the script for the local development environment
+# deploy will install the cuda kernel for a list of supported GPU architectures in the Makefile
+export BUILD_ENVIRONMENT=debug
