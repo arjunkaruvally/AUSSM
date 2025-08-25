@@ -63,18 +63,18 @@ print(model(x).shape)  ## (8, 256, 8)
 
 ## Setting the environment
 
-To simplify setup, every required path is set using environment variables. Use the template in the `.env` file to 
-configure the environment to run correctly in your system. Once the variables are configured, add the variables to
-the environment using the command `source .env`
+To simplify setup, every required path is set using environment variables. Use the template in the `.sample_env` file to 
+configure the environment to run correctly in your system. Once the variables are configured, save in a `.env` file (this is configured to be ignored by git) 
+add the variables to the environment using the command `source .env`
 
 ## Installation
 
 The CUDA operator makes creating a universal installation script almost impossible.
 I have thus created makefile targets for the different installation options.
-I have tested working codebase on `pytorch==2.4.0+cu12.1`. Follow the steps below
+I have tested working on `pytorch==2.4.0+cu12.1`. Follow the steps below
 
 NOTE: Virtual environments can be finicky to work with. There are some torch compilations that cause issues in the 
-build process. It is a faster process than a container but has a bigger chance of error.
+build process. Follow the steps exactly.
 
 1. verify and set all the environment variables in the .env file `source .env`
 2. create a **fresh** virtual environment and install the pytorch and cuda version and activate it
