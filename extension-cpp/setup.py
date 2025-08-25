@@ -92,7 +92,7 @@ setup(
     ext_modules=get_extensions(),
     install_requires=["torch"],
     description="cuda kernels for adaptive mamba implementations",
-    author='anonymous',
+    author='Arjun Karuvally',
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     cmdclass={'build_ext': BuildExtension}

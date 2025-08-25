@@ -1,4 +1,3 @@
-# Copyright (c) 2023, Albert Gu, Tri Dao.
 import sys
 import warnings
 import os
@@ -30,9 +29,9 @@ from torch.utils.cpp_extension import (
 PACKAGE_NAME = "wavesAI"
 
 setup(name=PACKAGE_NAME,
-      version='0.0.6',
+      version='0.1.0',
       description='Python Modules for Wave RNNs',
-      author='all authors',
-      author_email='anonymous@gmail.com',
+      author='Arjun Karuvally',
+      author_email='arjun.k018@gmail.com',
       packages=find_packages()
 )
